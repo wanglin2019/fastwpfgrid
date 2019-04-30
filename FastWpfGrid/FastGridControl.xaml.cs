@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
@@ -26,7 +27,7 @@ namespace FastWpfGrid
     public partial class FastGridControl : UserControl, IFastGridView
     {
         //private double _lastvscroll;
-        private IFastGridModel _model;
+        //private IFastGridModel _model;
 
         private FastGridCellAddress _currentCell;
 
@@ -36,9 +37,8 @@ namespace FastWpfGrid
         private Dictionary<Color, Brush> _solidBrushes = new Dictionary<Color, Brush>();
         private int _rowHeightReserve = 5;
         //private Color _headerBackground = Color.FromRgb(0xDD, 0xDD, 0xDD);
-        private WriteableBitmap _drawBuffer;
+        internal WriteableBitmap _drawBuffer;
 
-        private bool _isTransposed;
 
         private bool _isReadOnly;
 
@@ -47,8 +47,12 @@ namespace FastWpfGrid
         public FastGridControl()
         {
             InitializeComponent();
+            _rowSizes = new RowSeriesSizes(GetGridScrollAreaHeight);
+            _columnSizes = new ColumnSeriesSizes(GetGridScrollAreaWidth);
+
             //gridCore.Grid = this;
-            CellFontSize = 11;
+            _cellFontSize = 11;
+            _cellFontColor = Colors.Black;
             _dragTimer = new DispatcherTimer();
             _dragTimer.IsEnabled = false;
             _dragTimer.Interval = TimeSpan.FromSeconds(0.05);
@@ -118,24 +122,12 @@ namespace FastWpfGrid
             HeaderWidth = GetTextWidth("0000000", false, false);
             HeaderHeight = _rowSizes.DefaultSize;
 
-            if (IsTransposed) CountTransposedHeaderWidth();
-            if (Model != null)
+            var cell = GridHeaderCell;
+            int width = cell.GetCellContentWidth();
+            if (width + 2 * CellPaddingHorizontal > HeaderWidth)
             {
-                int width = GetCellContentWidth(Model.GetGridHeader(this));
-                if (width + 2 * CellPaddingHorizontal > HeaderWidth) HeaderWidth = width + 2 * CellPaddingHorizontal;
+                HeaderWidth = width + 2 * CellPaddingHorizontal;
             }
-        }
-
-        private void CountTransposedHeaderWidth()
-        {
-            int maxw = 0;
-            for (int col = 0; col < _modelColumnCount; col++)
-            {
-                var cell = Model.GetColumnHeader(this, col);
-                int width = GetCellContentWidth(cell) + 2*CellPaddingHorizontal;
-                if (width > maxw) maxw = width;
-            }
-            HeaderWidth = maxw;
         }
 
         //public int RowHeight
@@ -182,28 +174,36 @@ namespace FastWpfGrid
 
         private void OnModelPropertyChanged()
         {
-            if (_model != null) _model.DetachView(this);
-            _model = Model;
-            if (_model != null) _model.AttachView(this);
+            //if (_model != null) _model.DetachView(this);
+            //_model = Model;
+            //if (_model != null) _model.AttachView(this);
             NotifyRefresh();
         }
 
+        private int GetGridScrollAreaWidth()
+        {
+            if (_drawBuffer == null) return 1;
+            return _drawBuffer.PixelWidth - HeaderWidth - FrozenWidth;
+        }
 
         public int GridScrollAreaWidth
         {
             get
             {
-                if (_drawBuffer == null) return 1;
-                return _drawBuffer.PixelWidth - HeaderWidth - FrozenWidth;
+                return GetGridScrollAreaWidth();
             }
+        }
+        public int GetGridScrollAreaHeight()
+        {
+            if (_drawBuffer == null) return 1;
+            return _drawBuffer.PixelHeight - HeaderHeight - FrozenHeight;
         }
 
         public int GridScrollAreaHeight
         {
             get
             {
-                if (_drawBuffer == null) return 1;
-                return _drawBuffer.PixelHeight - HeaderHeight - FrozenHeight;
+                return GetGridScrollAreaHeight();
             }
         }
 
@@ -224,7 +224,7 @@ namespace FastWpfGrid
                 _columnSizes.ScrollCount - 1,
                 _columnSizes.ScrollCount - _columnSizes.GetVisibleScrollCountReversed(_columnSizes.ScrollCount - 1, GridScrollAreaWidth) + 1
                 );
-            hscroll.ViewportSize = VisibleColumnCount; //GridScrollAreaWidth;
+            hscroll.ViewportSize = _columnSizes.VisibleScrollColumnCount; //GridScrollAreaWidth;
             hscroll.SmallChange = 1; // GridScrollAreaWidth / 10.0;
             hscroll.LargeChange = 3; // GridScrollAreaWidth / 2.0;
 
@@ -248,7 +248,7 @@ namespace FastWpfGrid
         {
             //hscroll.Value = _columnSizes.GetPositionByScrollIndex(FirstVisibleColumnScrollIndex); //FirstVisibleColumn* ColumnWidth;
             //vscroll.Value = _rowSizes.GetPositionByScrollIndex(FirstVisibleRowScrollIndex);
-            hscroll.Value = FirstVisibleColumnScrollIndex;
+            hscroll.Value = _columnSizes.FirstVisibleScrollColumnIndex;
             vscroll.Value = FirstVisibleRowScrollIndex;
         }
 
@@ -260,13 +260,9 @@ namespace FastWpfGrid
 
         public void NotifyRefresh()
         {
-            _modelRowCount = 0;
-            _modelColumnCount = 0;
-            if (_model != null)
-            {
-                _modelRowCount = _model.RowCount;
-                _modelColumnCount = _model.ColumnCount;
-            }
+            _columnSizes.InitColumns(this.Columns);
+            _rowSizes.InitRows(this.Rows);
+            
 
             UpdateSeriesCounts();
             RecalculateHeaderSize();
@@ -274,6 +270,7 @@ namespace FastWpfGrid
 
             RecountColumnWidths();
             RecountRowHeights();
+            RecalculateDefaultCellSize();
             AdjustScrollbars();
             SetScrollbarMargin();
             FixScrollPosition();
@@ -287,13 +284,21 @@ namespace FastWpfGrid
 
             if (col.HasValue)
             {
-                if (col >= _modelColumnCount) col = _modelColumnCount - 1;
+                if (col >= _columnSizes.Count)
+                {
+                    col = _columnSizes.Count - 1;
+                }
+
                 if (col < 0) col = null;
             }
 
             if (row.HasValue)
             {
-                if (row >= _modelRowCount) row = _modelRowCount - 1;
+                if (row >= _rowSizes.Count)
+                {
+                    row = _rowSizes.Count - 1;
+                }
+
                 if (row < 0) row = null;
             }
 
@@ -320,41 +325,40 @@ namespace FastWpfGrid
 
         private IFastGridCell GetModelRowHeader(int row)
         {
-            if (_model == null) return null;
-            if (row < 0 || row >= _modelRowCount) return null;
-            return _model.GetRowHeader(this, row);
+            if (row < 0 || row >= _rowSizes.Count) return null;
+            return this.Rows[row].HeaderCell;
         }
 
         private IFastGridCell GetModelColumnHeader(int col)
         {
-            if (_model == null) return null;
-            if (col < 0 || col >= _modelColumnCount) return null;
-            return _model.GetColumnHeader(this, col);
+            var cell = this.Columns.GetHeaderCell(col);
+            return cell;
         }
 
         private IFastGridCell GetModelCell(int row, int col)
         {
-            if (_model == null) return null;
-            if (row < 0 || row >= _modelRowCount) return null;
-            if (col < 0 || col >= _modelColumnCount) return null;
-            return _model.GetCell(this, row, col);
+            if (row < 0 || row >= _rowSizes.Count) return null;
+            if (col < 0 || col >= _columnSizes.Count) return null;
+
+            object dataItem = Utility.ElementAt(ItemsSource, row);
+
+            var column = this.Columns.GetColumn(col);
+            var cell = column.GenerateContentCell(row, dataItem);
+            return cell;
         }
 
         private IFastGridCell GetColumnHeader(int col)
         {
-            if (IsTransposed) return GetModelRowHeader(_columnSizes.RealToModel(col));
             return GetModelColumnHeader(_columnSizes.RealToModel(col));
         }
 
         private IFastGridCell GetRowHeader(int row)
         {
-            if (IsTransposed) return GetModelColumnHeader(_rowSizes.RealToModel(row));
             return GetModelRowHeader(_rowSizes.RealToModel(row));
         }
 
         private IFastGridCell GetCell(int row, int col)
         {
-            if (IsTransposed) return GetModelCell(_columnSizes.RealToModel(col), _rowSizes.RealToModel(row));
             return GetModelCell(_rowSizes.RealToModel(row), _columnSizes.RealToModel(col));
         }
 
@@ -363,64 +367,64 @@ namespace FastWpfGrid
             if (addr.IsCell) return GetCell(addr.Row.Value, addr.Column.Value);
             if (addr.IsRowHeader) return GetRowHeader(addr.Row.Value);
             if (addr.IsColumnHeader) return GetColumnHeader(addr.Column.Value);
-            if (addr.IsGridHeader && _model != null) return _model.GetGridHeader(this);
+            if (addr.IsGridHeader) return GridHeaderCell;
             return null;
         }
 
         public void HideInlineEditor(bool saveCellValue = true)
         {
-            using (var ctx = CreateInvalidationContext())
-            {
-                if (saveCellValue && _inplaceEditorCell.IsCell && _inlineTextChanged)
-                {
-                    var cell = GetCell(_inplaceEditorCell.Row.Value, _inplaceEditorCell.Column.Value);
-                    cell.SetEditText(edText.Text);
-                    InvalidateCell(_inplaceEditorCell);
-                }
-                _inplaceEditorCell = new FastGridCellAddress();
-                edText.Text = "";
-                edText.Visibility = Visibility.Hidden;
-            }
-            Keyboard.Focus(image);
+            //using (var ctx = CreateInvalidationContext())
+            //{
+            //    if (saveCellValue && _inplaceEditorCell.IsCell && _inlineTextChanged)
+            //    {
+            //        var cell = GetCell(_inplaceEditorCell.Row.Value, _inplaceEditorCell.Column.Value);
+            //        cell.SetEditText(edText.Text);
+            //        InvalidateCell(_inplaceEditorCell);
+            //    }
+            //    _inplaceEditorCell = new FastGridCellAddress();
+            //    edText.Text = "";
+            //    edText.Visibility = Visibility.Hidden;
+            //}
+            //Keyboard.Focus(image);
         }
 
         private void ShowInlineEditor(FastGridCellAddress cell, string textValueOverride = null)
         {
-            if (_isReadOnly) return;
-            if (!cell.IsCell) return;
-            var cellObj = GetCell(cell.Row.Value, cell.Column.Value);
-            if (cellObj == null) return;
-            string text = cellObj.GetEditText();
-            if (text == null) return;
+            //if (_isReadOnly) return;
+            //if (!cell.IsCell) return;
+            //var cellObj = GetCell(cell.Row.Value, cell.Column.Value);
+            //if (cellObj == null) return;
+            //string text = cellObj.GetEditText();
+            //if (text == null) return;
 
-            _inplaceEditorCell = cell;
+            //_inplaceEditorCell = cell;
 
-            edText.Text = textValueOverride ?? text;
-            edText.Visibility = Visibility.Visible;
-            AdjustInlineEditorPosition();
+            //edText.Text = textValueOverride ?? text;
+            //edText.Visibility = Visibility.Visible;
+            //AdjustInlineEditorPosition();
 
-            if (edText.IsFocused)
-            {
-                if (textValueOverride == null)
-                {
-                    edText.SelectAll();
-                }
-            }
-            else
-            {
-                edText.Focus();
-                if (textValueOverride == null)
-                {
-                    Application.Current.Dispatcher.BeginInvoke(DispatcherPriority.Input, (Action) edText.SelectAll);
-                }
-            }
+            //if (edText.IsFocused)
+            //{
+            //    if (textValueOverride == null)
+            //    {
+            //        edText.SelectAll();
+            //    }
+            //}
+            //else
+            //{
+            //    edText.Focus();
+            //    if (textValueOverride == null)
+            //    {
+            //        Application.Current.Dispatcher.BeginInvoke(DispatcherPriority.Input, (Action) edText.SelectAll);
+            //    }
+            //}
 
-            if (textValueOverride != null)
-            {
-                edText.SelectionStart = textValueOverride.Length;
-            }
+            //if (textValueOverride != null)
+            //{
+            //    edText.SelectionStart = textValueOverride.Length;
+            //}
 
-            _inlineTextChanged = !String.IsNullOrEmpty(textValueOverride);
+            //_inlineTextChanged = !String.IsNullOrEmpty(textValueOverride);
         }
 
         private void AdjustInlineEditorPosition()
@@ -428,7 +432,7 @@ namespace FastWpfGrid
             if (_inplaceEditorCell.IsCell)
             {
                 bool visible = _rowSizes.IsVisible(_inplaceEditorCell.Row.Value, FirstVisibleRowScrollIndex, GridScrollAreaHeight)
-                               && _columnSizes.IsVisible(_inplaceEditorCell.Column.Value, FirstVisibleColumnScrollIndex, GridScrollAreaWidth);
+                               && _columnSizes.IsVisible(_inplaceEditorCell.Column.Value, _columnSizes.FirstVisibleScrollColumnIndex, GridScrollAreaWidth);
                 edText.Visibility = visible ? Visibility.Visible : Visibility.Hidden;
                 var rect = GetCellRect(_inplaceEditorCell.Row.Value, _inplaceEditorCell.Column.Value);
 
@@ -677,8 +681,8 @@ namespace FastWpfGrid
 
         private bool IsModelCellInValidRange(FastGridCellAddress cell)
         {
-            if (cell.Row.HasValue && (cell.Row.Value < 0 || cell.Row.Value >= _modelRowCount)) return false;
-            if (cell.Column.HasValue && (cell.Column.Value < 0 || cell.Column.Value >= _modelColumnCount)) return false;
+            if (cell.Row.HasValue && (cell.Row.Value < 0 || cell.Row.Value >= _rowSizes.Count)) return false;
+            if (cell.Column.HasValue && (cell.Column.Value < 0 || cell.Column.Value >= _columnSizes.Count)) return false;
             return true;
         }
 
@@ -708,9 +712,84 @@ namespace FastWpfGrid
             }
             else
             {
-                mnuSelection.ItemsSource = commands.Select(x => new SelectionQuickCommand(Model, x)).ToList();
+                mnuSelection.ItemsSource = commands.Select(x => new SelectionQuickCommand(x)).ToList();
                 mnuSelection.Visibility = Visibility.Visible;
                 AdjustSelectionMenuPosition();
+            }
+        }
+
+        private FastGridColumnCollection columns;
+
+        public FastGridColumnCollection Columns
+        {
+            get
+            {
+                if (this.columns == null)
+                {
+                    this.columns = new FastGridColumnCollection();
+                }
+
+                return this.columns;
+            }
+            set
+            {
+                this.columns = value;
+            }
+        }
+
+        private IEnumerable _itemsSource;
+
+        public IEnumerable ItemsSource
+        {
+            get
+            {
+                return _itemsSource;
+            }
+            set
+            {
+                _itemsSource = value;
+                foreach (var item in value)
+                {
+                    var row = new FastGridRow();
+                    row.DataItem = item;
+                    this.Rows.Add(row);
+                }
+            }
+        }
+
+        private FastGridRowCollection _rows;
+        public FastGridRowCollection Rows
+        {
+            get
+            {
+                if (_rows == null)
+                {
+                    _rows = new FastGridRowCollection();
+                }
+
+                return this._rows;
+            }
+            set
+            {
+                this._rows = value;
+            }
+        }
+
+        private FastGridHeaderCell headerCell;
+        public FastGridHeaderCell GridHeaderCell
+        {
+            get
+            {
+                if (headerCell == null)
+                {
+                    return FastGridHeaderCell.Default;
+                }
+
+                return headerCell;
+            }
+            set
+            {
+                headerCell = value;
             }
         }
     }

@@ -19,7 +19,7 @@
                         <CheckBox Content="Freeze column 5" x:Name="chbFreezeColumn5" Click="columnsCfgChanged" />
                     </StackPanel>
                     <FastWpfGrid:FastGridControl x:Name="grid1" Grid.Row="1" 
-                                                 IsTransposed="{Binding IsChecked, ElementName=chbIsTransposed1, Mode=TwoWay}"
+                                                 
                                                  UseClearType="{Binding IsChecked, ElementName=chbClearType1}"
                                                  SelectedCellsChanged="grid1_SelectedCellsChanged"
                                                  >
@@ -42,7 +42,7 @@
                         <CheckBox Content="Is transposed" x:Name="chbIsTransposed2" />
                     </StackPanel>
                     <FastWpfGrid:FastGridControl x:Name="grid2" Grid.Row="1" 
-                                                 IsTransposed="{Binding IsChecked, ElementName=chbIsTransposed2}"
+                                                 
                                                  UseClearType="{Binding IsChecked, ElementName=chbClearType2}"
                                                  />
                 </Grid>
@@ -58,7 +58,7 @@
                         <CheckBox Content="Flexible rows" x:Name="chbFlexibleRows" />
                     </StackPanel>
                     <FastWpfGrid:FastGridControl x:Name="grid3" Grid.Row="1" 
-                                                 IsTransposed="{Binding IsChecked, ElementName=chbIsTransposed3}"
+                                                 
                                                  AllowFlexibleRows="{Binding IsChecked, ElementName=chbFlexibleRows}"
                                                  />
                 </Grid>

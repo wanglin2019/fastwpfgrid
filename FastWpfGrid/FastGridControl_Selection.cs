@@ -24,14 +24,7 @@ namespace FastWpfGrid
             {
                 if (_selectedRealRowCountLimitLoaded) return _selectedRealRowCountLimit;
                 _selectedRealRowCountLimitLoaded = true;
-                if (Model == null)
-                {
-                    _selectedRealRowCountLimit = null;
-                }
-                else
-                {
-                    _selectedRealRowCountLimit = IsTransposed ? Model.SelectedColumnCountLimit : Model.SelectedRowCountLimit;
-                }
+                
                 return _selectedRealRowCountLimit;
             }
         }
@@ -44,14 +37,7 @@ namespace FastWpfGrid
             {
                 if (_selectedRealColumnCountLimitLoaded) return _selectedRealColumnCountLimit;
                 _selectedRealColumnCountLimitLoaded = true;
-                if (Model == null)
-                {
-                    _selectedRealColumnCountLimit = null;
-                }
-                else
-                {
-                    _selectedRealColumnCountLimit = IsTransposed ? Model.SelectedRowCountLimit : Model.SelectedColumnCountLimit;
-                }
+                
                 return _selectedRealColumnCountLimit;
             }
         }

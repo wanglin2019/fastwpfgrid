@@ -7,6 +7,13 @@ namespace System.Windows.Media.Imaging
 {
     public struct IntRect
     {
+        public static readonly IntRect Empty = new IntRect()
+        {
+            Left = 0,
+            Top = 0,
+            Right = 0,
+            Bottom = 0,
+        };
         public int Left, Top, Right, Bottom;
 
         public int Width
@@ -88,6 +95,16 @@ namespace System.Windows.Media.Imaging
         public bool Contains(Point pt)
         {
             return pt.X >= Left && pt.X <= Right && pt.Y >= Top && pt.Y <= Bottom;
+        }
+
+        public IntRect GrowSymmetrical(IntRect? r)
+        {
+            var rect = r ?? IntRect.Empty;
+
+            return new IntRect(
+                new IntPoint(Left + rect.Left, Top + rect.Top),
+                new IntSize(Width - rect.Left - rect.Right, Height - rect.Top - rect.Bottom)
+            );
         }
     }
 

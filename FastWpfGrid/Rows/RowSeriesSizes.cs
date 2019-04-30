@@ -6,21 +6,6 @@ using System.Threading.Tasks;
 
 namespace FastWpfGrid
 {
-    public class SeriesSizeItem
-    {
-        public int DisplayIndex = -1;
-        public int ScrollIndex = -1;
-        public int ModelIndex;
-        public int FrozenIndex = -1;
-        public int Size;
-        public int Position;
-
-        public int EndPosition
-        {
-            get { return Position + Size; }
-        }
-    }
-
     /// <summary>
     /// Manager to hold column/row sizes and indexes
     /// Terminology: 
@@ -30,8 +15,10 @@ namespace FastWpfGrid
     /// RealIndex - index in frozen and scroll area (first are frozen items, than scroll items)
     /// Grid uses mostly RealIndex
     /// </summary>
-    public class SeriesSizes
+    public class RowSeriesSizes
     {
+        private FastGridRowCollection _rows;
+
         private Dictionary<int, int> _sizeOverridesByModelIndex = new Dictionary<int, int>();
         private int _count;
         public int DefaultSize;
@@ -45,11 +32,34 @@ namespace FastWpfGrid
         private List<int> _positions = new List<int>();
         private List<int> _scrollIndexes = new List<int>();
         private List<SeriesSizeItem> _frozenItems = new List<SeriesSizeItem>();
+        public Func<int> ScrollAreaHeightCalculator;
+
+        public RowSeriesSizes(Func<int> ScrollAreaHeightCalculator)
+        {
+            this.ScrollAreaHeightCalculator = ScrollAreaHeightCalculator;
+        }
+
+        public int ScrollAreaHeight
+        {
+            get
+            {
+                var width = ScrollAreaHeightCalculator();
+                return width;
+            }
+        }
+
+        public FastGridRowCollection Rows
+        {
+            get
+            {
+                return this._rows;
+            }
+        }
 
         public int Count
         {
             get { return _count; }
-            set { _count = value; }
+            private set { _count = value; }
         }
 
         public int ScrollCount
@@ -70,6 +80,12 @@ namespace FastWpfGrid
         public int RealCount
         {
             get { return FrozenCount + ScrollCount; }
+        }
+
+        public void InitRows(FastGridRowCollection rows)
+        {
+            this._rows = rows;
+            this.Count = rows.Count;
         }
 
         public void Clear()
@@ -257,7 +273,7 @@ namespace FastWpfGrid
             int res = 0;
             int index = firstVisibleIndex;
             int count = 0;
-            while (res < viewportSize && index <= Count)
+            while (res < viewportSize && index < Count)
             {
                 res += GetSizeByScrollIndex(index);
                 index++;
@@ -357,7 +373,12 @@ namespace FastWpfGrid
             BuildIndex();
         }
 
-        public void SetExtraordinaryIndexes(HashSet<int> hidden, HashSet<int> frozen)
+        public void SetExtraordinaryRealRows()
+        {
+            this.SetExtraordinaryIndexes(Rows.GetHiddenRowsIndex(), Rows.GetFrozenRowsIndex());
+        }
+
+        private void SetExtraordinaryIndexes(HashSet<int> hidden, HashSet<int> frozen)
         {
             _hiddenAndFrozenModelIndexes = new List<int>(hidden);
             _frozenModelIndexes = new List<int>(frozen.Where(x => !hidden.Contains(x)));
@@ -426,6 +447,17 @@ namespace FastWpfGrid
             int scrollIndex = testedRealIndex - FrozenCount;
             int onPageIndex = scrollIndex - firstVisibleScrollIndex;
             return onPageIndex >= 0 && onPageIndex < GetVisibleScrollCount(firstVisibleScrollIndex, viewportSize);
+        }
+
+        public int? GetSeriesIndexOnPosition(double position, int headerSize, int firstVisible)
+        {
+            var series = this;
+            if (position <= headerSize) return null;
+            int frozenSize = series.FrozenSize;
+            if (position <= headerSize + frozenSize) return series.GetFrozenIndexOnPosition((int)Math.Round(position - headerSize));
+            return series.GetScrollIndexOnPosition(
+                       (int)Math.Round(position - headerSize - frozenSize) + series.GetPositionByScrollIndex(firstVisible)
+                   ) + series.FrozenCount;
         }
     }
 }

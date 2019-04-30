@@ -69,10 +69,7 @@ namespace FastWpfGrid
         /// </summary>
         void NotifyRowArrangeChanged();
 
-        /// <summary>
-        /// set/get whether grid is transposed
-        /// </summary>
-        bool IsTransposed { get; set; }
+       
 
         /// <summary>
         /// gets whether flexible rows (real rows) are curently used

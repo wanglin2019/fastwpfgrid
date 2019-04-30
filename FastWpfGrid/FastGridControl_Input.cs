@@ -13,7 +13,6 @@ namespace FastWpfGrid
 {
     partial class FastGridControl
     {
-        public static readonly object ToggleTransposedCommand = new object();
         public static readonly object ToggleAllowFlexibleRowsCommand = new object();
         public static readonly object SelectAllCommand = new object();
         public static readonly object AdjustColumnSizesCommand = new object();
@@ -29,15 +28,15 @@ namespace FastWpfGrid
         public event Action<object, RowClickEventArgs> RowHeaderClick;
         public List<ActiveRegion> CurrentCellActiveRegions = new List<ActiveRegion>();
         public ActiveRegion CurrentHoverRegion;
-        private Point? _mouseCursorPoint;
+        internal Point? _mouseCursorPoint;
         private ToolTip _tooltip;
         private object _tooltipTarget;
         private string _tooltipText;
         private DispatcherTimer _tooltipTimer;
         private DispatcherTimer _dragTimer;
         private FastGridCellAddress _dragStartCell;
-        private FastGridCellAddress _mouseOverCell;
-        private bool _mouseOverCellIsTrimmed;
+        internal FastGridCellAddress _mouseOverCell;
+        internal bool _mouseOverCellIsTrimmed;
         private int? _mouseOverRow;
         private int? _mouseOverRowHeader;
         private int? _mouseOverColumnHeader;
@@ -57,7 +56,7 @@ namespace FastWpfGrid
         private int? _mouseMoveColumn;
         private int? _mouseMoveRow;
 
-        private int? _resizingColumn;
+        private FastGridColumn _resizingColumn;
         private Point? _resizingColumnOrigin;
         private int? _resizingColumnStartSize;
         private int? _lastResizingColumn;
@@ -87,7 +86,7 @@ namespace FastWpfGrid
                 if (resizingColumn != null)
                 {
                     Cursor = Cursors.SizeWE;
-                    _resizingColumn = resizingColumn;
+                    _resizingColumn = this.Columns.FirstOrDefault(x=>x.DisplayIndex== resizingColumn.Value);
                     _resizingColumnOrigin = pt;
                     _resizingColumnStartSize = _columnSizes.GetSizeByRealIndex(_resizingColumn.Value);
                     CaptureMouse();
@@ -96,25 +95,11 @@ namespace FastWpfGrid
                 bool isHeaderClickHandled = false;
                 if (_resizingColumn == null && cell.IsColumnHeader)
                 {
-                    if (IsTransposed)
-                    {
-                        isHeaderClickHandled = OnModelRowClick(_columnSizes.RealToModel(cell.Column.Value));
-                    }
-                    else
-                    {
-                        isHeaderClickHandled = OnModelColumnClick(_columnSizes.RealToModel(cell.Column.Value));
-                    }
+                    isHeaderClickHandled = OnModelColumnClick(_columnSizes.RealToModel(cell.Column.Value));
                 }
                 if (cell.IsRowHeader)
                 {
-                    if (IsTransposed)
-                    {
-                        isHeaderClickHandled = OnModelColumnClick(_rowSizes.RealToModel(cell.Row.Value));
-                    }
-                    else
-                    {
-                        isHeaderClickHandled = OnModelRowClick(_rowSizes.RealToModel(cell.Row.Value));
-                    }
+                    isHeaderClickHandled = OnModelRowClick(_rowSizes.RealToModel(cell.Row.Value));
                 }
 
                 if (!isHeaderClickHandled && ((_resizingColumn == null && cell.IsColumnHeader) || cell.IsRowHeader) 
@@ -218,21 +203,21 @@ namespace FastWpfGrid
                 _lastDblClickResize = DateTime.Now;
                 int col = _lastResizingColumn.Value;
 
-                _columnSizes.RemoveSizeOverride(col);
+                //_columnSizes.RemoveSizeOverride(col);
 
-                if (_model == null) return;
-                int rowCount = _isTransposed ? _modelColumnCount : _modelRowCount;
-                int colCount = _isTransposed ? _modelRowCount : _modelColumnCount;
+                int rowCount = _rowSizes.Count;
+                int colCount = _columnSizes.Count;
                 {
-                    var cell = _isTransposed ? _model.GetRowHeader(this, col) : _model.GetColumnHeader(this, col);
-                    _columnSizes.PutSizeOverride(col, GetCellContentWidth(cell) + 2 * CellPaddingHorizontal);
+                    var cell = Columns.GetHeaderCell(col);
+                    _columnSizes.PutSizeOverride(col, cell.GetCellContentWidth() + cell.Padding.Width);
                 }
                 int visRows = VisibleRowCount;
                 int row0 = FirstVisibleRowScrollIndex + _rowSizes.FrozenCount;
                 for (int row = row0; row < Math.Min(row0 + visRows, rowCount); row++)
                 {
-                    var cell = _isTransposed ? _model.GetCell(this, col, row) : _model.GetCell(this, row, col);
-                    _columnSizes.PutSizeOverride(col, GetCellContentWidth(cell, _columnSizes.MaxSize) + 2 * CellPaddingHorizontal);
+                    
+                    var cell = Rows.GetContentCell(row, col);
+                    _columnSizes.PutSizeOverride(col, cell.GetCellContentWidth(_columnSizes.MaxSize) + cell.Padding.Width);
                 }
 
                 _columnSizes.BuildIndex();
@@ -252,7 +237,7 @@ namespace FastWpfGrid
                     int newRow = FirstVisibleRowScrollIndex + 1;
                     if (!_rowSizes.IsWholeInView(FirstVisibleRowScrollIndex, _rowSizes.ScrollCount - 1, GridScrollAreaHeight))
                     {
-                        ScrollContent(newRow, FirstVisibleColumnScrollIndex);
+                        ScrollContent(newRow, _columnSizes.FirstVisibleScrollColumnIndex);
                         var row = FirstVisibleRowScrollIndex + VisibleRowCount - 1 + _rowSizes.FrozenCount;
                         SetSelectedRectangle(_dragStartCell, new FastGridCellAddress(row, _mouseMoveColumn ?? _currentCell.Column));
                         AdjustScrollBarPositions();
@@ -263,7 +248,7 @@ namespace FastWpfGrid
                     int newRow = FirstVisibleRowScrollIndex - 1;
                     if (newRow >= 0)
                     {
-                        ScrollContent(newRow, FirstVisibleColumnScrollIndex);
+                        ScrollContent(newRow, _columnSizes.FirstVisibleScrollColumnIndex);
                         var row = newRow + _rowSizes.FrozenCount;
                         SetSelectedRectangle(_dragStartCell, new FastGridCellAddress(row, _mouseMoveColumn ?? _currentCell.Column));
                         AdjustScrollBarPositions();
@@ -274,18 +259,18 @@ namespace FastWpfGrid
             {
                 if (_mouseIsBehindRight)
                 {
-                    int newColumn = FirstVisibleColumnScrollIndex + 1;
-                    if (!_columnSizes.IsWholeInView(FirstVisibleColumnScrollIndex, _columnSizes.ScrollCount - 1, GridScrollAreaWidth))
+                    int newColumn = _columnSizes.FirstVisibleScrollColumnIndex + 1;
+                    if (!_columnSizes.IsWholeInView(_columnSizes.FirstVisibleScrollColumnIndex, _columnSizes.ScrollCount - 1, GridScrollAreaWidth))
                     {
                         ScrollContent(FirstVisibleRowScrollIndex, newColumn);
-                        var col = FirstVisibleColumnScrollIndex + VisibleColumnCount - 1 + _columnSizes.FrozenCount;
+                        var col = _columnSizes.LastVisibleScrollColumnDisplayIndex - 1;
                         SetSelectedRectangle(_dragStartCell, new FastGridCellAddress(_mouseMoveRow ?? _currentCell.Row, col));
                         AdjustScrollBarPositions();
                     }
                 }
                 if (_mouseIsBehindLeft)
                 {
-                    int newColumn = FirstVisibleColumnScrollIndex - 1;
+                    int newColumn = _columnSizes.FirstVisibleScrollColumnIndex - 1;
                     if (newColumn >= 0)
                     {
                         ScrollContent(FirstVisibleRowScrollIndex, newColumn);
@@ -361,7 +346,7 @@ namespace FastWpfGrid
 
         private bool OnModelColumnClick(int column)
         {
-            if (column >= 0 && column < _modelColumnCount)
+            if (column >= 0 && column < _columnSizes.Count)
             {
                 var args = new ColumnClickEventArgs
                 {
@@ -379,7 +364,7 @@ namespace FastWpfGrid
 
         private bool OnModelRowClick(int row)
         {
-            if (row >= 0 && row < _modelRowCount)
+            if (row >= 0 && row < _rowSizes.Count)
             {
                 var args = new RowClickEventArgs
                 {
@@ -576,8 +561,8 @@ namespace FastWpfGrid
                 pt.Y *= DpiDetector.DpiYKoef;
                 _mouseCursorPoint = pt;
                 var cell = GetCellAddress(pt);
-                _mouseMoveRow = GetSeriesIndexOnPosition(pt.Y, HeaderHeight, _rowSizes, FirstVisibleRowScrollIndex);
-                _mouseMoveColumn = GetSeriesIndexOnPosition(pt.X, HeaderWidth, _columnSizes, FirstVisibleColumnScrollIndex);
+                _mouseMoveRow = _rowSizes.GetSeriesIndexOnPosition(pt.Y, HeaderHeight, FirstVisibleRowScrollIndex);
+                _mouseMoveColumn = _columnSizes.GetSeriesIndexOnPosition(pt.X, HeaderWidth, _columnSizes.FirstVisibleScrollColumnIndex);
 
                 if (_resizingColumn.HasValue)
                 {
@@ -704,16 +689,13 @@ namespace FastWpfGrid
         public void HandleCommand(FastGridCellAddress address, object commandParameter)
         {
             bool handled = false;
-            if (Model != null)
-            {
-                var addressModel = RealToModel(address);
-                Model.HandleCommand(this, addressModel, commandParameter, ref handled);
-            }
+            //if (Model != null)
+            //{
+            //    var addressModel = RealToModel(address);
+            //    Model.HandleCommand(this, addressModel, commandParameter, ref handled);
+            //}
             if (handled) return;
-            if (commandParameter == ToggleTransposedCommand)
-            {
-                IsTransposed = !IsTransposed;
-            }
+           
             if (commandParameter == ToggleAllowFlexibleRowsCommand)
             {
                 AllowFlexibleRows = !AllowFlexibleRows;
@@ -795,7 +777,7 @@ namespace FastWpfGrid
         {
             dynamic button = sender;
             SelectionQuickCommand cmd = button.DataContext;
-            cmd.Model.HandleSelectionCommand(this, cmd.Text);
+            //cmd.Model.HandleSelectionCommand(this, cmd.Text);
         }
     }
 }

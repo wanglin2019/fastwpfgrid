@@ -25,17 +25,35 @@ namespace FastWpfGrid
     {
         FastGridBlockType BlockType { get; }
 
-        Color? FontColor { get; }
-        bool IsItalic { get; }
-        bool IsBold { get; }
-        string TextData { get; }
-
-        string ImageSource { get; }
-        int ImageWidth { get; }
-        int ImageHeight { get; }
 
         MouseHoverBehaviours MouseHoverBehaviour { get; }
         object CommandParameter { get; }
         string ToolTip { get; }
+
+
+        IFastGridCell Cell
+        {
+            get;
+        }
+
+        void Render();
+
+        int GetWidth(int? maxSize = null);
+        int GetHeight();
+
+        FastGridThickness Padding
+        {
+            get;
+            set;
+        }
+        int ActualWidth
+        {
+            get;
+        }
+
+        int ActualHeight
+        {
+            get;
+        }
     }
 }
