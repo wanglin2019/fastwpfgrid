@@ -25,6 +25,10 @@ namespace FastWpfGrid
             }
             using (_drawBuffer.GetBitmapContext())
             {
+                if (this._resizingColumn != null)
+                {
+                    var ddd = 0;
+                }
                 int colsToRender = _columnSizes.VisibleScrollColumnCount;
                 int rowsToRender = VisibleRowCount;
 
@@ -139,6 +143,8 @@ namespace FastWpfGrid
             if (col == _currentCell.Column) selectedBgColor = HeaderCurrentBackground;
 
             var rect = GetColumnHeaderRect(col);
+            Debug.WriteLine($"column:{col}, start:{rect.Left}, width:{rect.Width}");
+
             Color? cellBackground = null;
             if (cell != null) cellBackground = cell.BackgroundColor;
 
@@ -168,6 +174,7 @@ namespace FastWpfGrid
         private void RenderCell(int row, int col)
         {
             var rect = GetCellRect(row, col);
+            
             var cell = GetCell(row, col);
             if (cell == null)
             {

@@ -48,9 +48,9 @@ namespace FastWpfGridTest
             var ret = new List<DataItem>();
 
             ret.Add(new DataItem(){ A = "1aaa", B = "1bbb", C = "1ccc", D = "1d" ,E = "1e", F = "1f" });
-            ret.Add(new DataItem() { A = "2aaa", B = "2bbb" });
-            ret.Add(new DataItem() { A = "3aaa", B = "3bbb" });
-            ret.Add(new DataItem() { A = "4aaa", B = "4bbb" });
+            //ret.Add(new DataItem() { A = "2aaa", B = "2bbb" });
+            //ret.Add(new DataItem() { A = "3aaa", B = "3bbb" });
+            //ret.Add(new DataItem() { A = "4aaa", B = "4bbb" });
             return ret;
         }
     }

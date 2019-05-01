@@ -189,26 +189,5 @@ namespace FastWpfGrid
             return _InvalidatedGridHeader;
         }
 
-        public void InvalidateModelCell(int row, int column)
-        {
-            InvalidateCell(ModelToReal(new FastGridCellAddress(row, column)));
-        }
-
-        public void InvalidateModelRowHeader(int row)
-        {
-            InvalidateCell(ModelToReal(new FastGridCellAddress(row, null)));
-        }
-        public void InvalidateModelRow(int row)
-        {
-            InvalidateRow(_rowSizes.ModelToReal(row));
-        }
-        public void InvalidateModelColumnHeader(int column)
-        {
-            InvalidateCell(ModelToReal(new FastGridCellAddress(null, column)));
-        }
-        public void InvalidateModelColumn(int column)
-        {
-            InvalidateColumn(_columnSizes.ModelToReal(column));
-        }
     }
 }

@@ -59,7 +59,7 @@ namespace FastWpfGrid
         private FastGridColumn _resizingColumn;
         private Point? _resizingColumnOrigin;
         private int? _resizingColumnStartSize;
-        private int? _lastResizingColumn;
+        private FastGridColumn _lastResizingColumn;
         private DateTime _lastResizingColumnSet;
         private DateTime? _lastDblClickResize;
 
@@ -88,7 +88,7 @@ namespace FastWpfGrid
                     Cursor = Cursors.SizeWE;
                     _resizingColumn = this.Columns.FirstOrDefault(x=>x.DisplayIndex== resizingColumn.Value);
                     _resizingColumnOrigin = pt;
-                    _resizingColumnStartSize = _columnSizes.GetSizeByRealIndex(_resizingColumn.Value);
+                    _resizingColumnStartSize = _resizingColumn.Width;
                     CaptureMouse();
                 }
 
@@ -198,17 +198,18 @@ namespace FastWpfGrid
         protected override void OnMouseDoubleClick(MouseButtonEventArgs e)
         {
             base.OnMouseDoubleClick(e);
-            if (e.ChangedButton == MouseButton.Left && (_lastResizingColumn.HasValue && (DateTime.Now - _lastResizingColumnSet) < TimeSpan.FromSeconds(1)))
+            if (e.ChangedButton == MouseButton.Left && (_lastResizingColumn!=null && (DateTime.Now - _lastResizingColumnSet) < TimeSpan.FromSeconds(1)))
             {
                 _lastDblClickResize = DateTime.Now;
-                int col = _lastResizingColumn.Value;
+                int col = _lastResizingColumn.Index;
 
                 //_columnSizes.RemoveSizeOverride(col);
 
                 int rowCount = _rowSizes.Count;
                 int colCount = _columnSizes.Count;
                 {
-                    var cell = Columns.GetHeaderCell(col);
+                    var cell = _lastResizingColumn.GetHeaderCell();
+
                     _columnSizes.PutSizeOverride(col, cell.GetCellContentWidth() + cell.Padding.Width);
                 }
                 int visRows = VisibleRowCount;
@@ -292,7 +293,7 @@ namespace FastWpfGrid
                 ReleaseMouseCapture();
             }
             //bool wasColumnResizing = false;
-            if (_resizingColumn.HasValue)
+            if (_resizingColumn!=null)
             {
                 _lastResizingColumnSet = DateTime.Now;
                 _lastResizingColumn = _resizingColumn;
@@ -562,15 +563,21 @@ namespace FastWpfGrid
                 _mouseCursorPoint = pt;
                 var cell = GetCellAddress(pt);
                 _mouseMoveRow = _rowSizes.GetSeriesIndexOnPosition(pt.Y, HeaderHeight, FirstVisibleRowScrollIndex);
-                _mouseMoveColumn = _columnSizes.GetSeriesIndexOnPosition(pt.X, HeaderWidth, _columnSizes.FirstVisibleScrollColumnIndex);
+                _mouseMoveColumn = _columnSizes.GetDisplayIndexOnPosition((int)pt.X- HeaderWidth);
 
-                if (_resizingColumn.HasValue)
+                if (_resizingColumn!=null)
                 {
                     int newSize = _resizingColumnStartSize.Value + (int)Math.Round(pt.X - _resizingColumnOrigin.Value.X);
-                    if (newSize < MinColumnWidth) newSize = MinColumnWidth;
-                    if (newSize > GridScrollAreaWidth) newSize = GridScrollAreaWidth;
-                    _columnSizes.Resize(_resizingColumn.Value, newSize);
-                    if (_resizingColumn < _columnSizes.FrozenCount)
+                    if (newSize < _resizingColumn.MinWidth)
+                    {
+                        newSize = _resizingColumn.MinWidth;
+                    }
+                    if (newSize > GridScrollAreaWidth)
+                    {
+                        newSize = GridScrollAreaWidth;
+                    }
+                    _columnSizes.Resize(_resizingColumn.DisplayIndex, newSize);
+                    if (_resizingColumn.DisplayIndex < _columnSizes.FrozenCount)
                     {
                         SetScrollbarMargin();
                     }

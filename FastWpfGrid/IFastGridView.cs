@@ -18,31 +18,31 @@ namespace FastWpfGrid
         /// </summary>
         /// <param name="row"></param>
         /// <param name="column"></param>
-        void InvalidateModelCell(int row, int column);
+        void InvalidateCell(int row, int column);
         
         /// <summary>
         /// invalidates given row header
         /// </summary>
         /// <param name="row"></param>
-        void InvalidateModelRowHeader(int row);
+        void InvalidateRowHeader(int row);
 
         /// <summary>
         /// invalidates given row (all cells including header)
         /// </summary>
         /// <param name="row"></param>
-        void InvalidateModelRow(int row);
+        void InvalidateRow(int row);
 
         /// <summary>
         /// invalidates given column header
         /// </summary>
         /// <param name="column"></param>
-        void InvalidateModelColumnHeader(int column);
+        void InvalidateColumnHeader(int column);
 
         /// <summary>
         /// invalidates given column (all cells including header)
         /// </summary>
         /// <param name="column"></param>
-        void InvalidateModelColumn(int column);
+        void InvalidateColumn(int column);
 
         /// <summary>
         /// invalidates grid header (top-left header cell)

@@ -72,17 +72,29 @@ namespace FastWpfGrid
         protected override void OnCollectionChanged(NotifyCollectionChangedEventArgs e)
         {
             base.OnCollectionChanged(e);
-            var displayIndex = 0;
+            
             for (var i = 0; i < this.Count; i++)
             {
                 var column = this[i];
                 column.Owner = this;
                 column.Index = i;
-                if (!column.IsHidden)
-                {
-                    column.DisplayIndex = displayIndex;
-                    displayIndex += 1;
-                }
+            }
+
+            var frozenColumns = this.Where(x => x.IsFrozen && x.IsHidden == false).OrderBy(x => x.Index);
+
+            var normalColumns = this.Where(x => x.IsFrozen == false && x.IsHidden == false).OrderBy(x => x.Index);
+
+            var displayIndex = 0;
+            foreach (var column in frozenColumns)
+            {
+                column.DisplayIndex = displayIndex;
+                displayIndex += 1;
+            }
+
+            foreach (var column in normalColumns)
+            {
+                column.DisplayIndex = displayIndex;
+                displayIndex += 1;
             }
         }
 

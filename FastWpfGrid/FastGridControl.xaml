@@ -15,6 +15,7 @@
             <ColumnDefinition Width="Auto" />
         </Grid.ColumnDefinitions>
 
+        <Border BorderBrush="Gray" BorderThickness="1">
         <Grid x:Name="imageGrid" Grid.Row="0" Grid.Column="0" SizeChanged="imageGridResized">
             <Image 
                 x:Name="image" SnapsToDevicePixels="True" Focusable="True" KeyDown="imageKeyDown" MouseDown="imageMouseDown" 
@@ -38,7 +39,7 @@
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
         </Grid>
-        
+        </Border>
 
         <ScrollBar Orientation="Horizontal" Grid.Column="0" Grid.Row="1" x:Name="hscroll" Maximum="100" Scroll="hscroll_Scroll" />
         <ScrollBar Orientation="Vertical" Grid.Column="1" Grid.Row="0" x:Name="vscroll" Maximum="100" Scroll="vscroll_Scroll" />

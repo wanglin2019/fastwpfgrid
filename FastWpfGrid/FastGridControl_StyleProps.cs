@@ -69,11 +69,6 @@ namespace FastWpfGrid
             }
         }
 
-        public int MinColumnWidth
-        {
-            get { return _minColumnWidthOverride ?? _columnSizes.DefaultSize; }
-        }
-
         public int CellFontSize
         {
             get { return _cellFontSize; }

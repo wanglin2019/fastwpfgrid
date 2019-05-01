@@ -23,7 +23,7 @@ namespace FastWpfGrid
 
         
         private int _count;
-        public int DefaultSize;
+        
         public int? MaxSize;
         //private List<int> _hiddenAndFrozenModelIndexes;
         //private List<int> _frozenModelIndexes;
@@ -33,8 +33,10 @@ namespace FastWpfGrid
         //private Dictionary<int, SeriesSizeItem> _itemByIndex = new Dictionary<int, SeriesSizeItem>();
         private List<int> _positions = new List<int>();
         private List<int> _scrollIndexes = new List<int>();
-        private List<SeriesSizeItem> _frozenItems = new List<SeriesSizeItem>();
+        
         public Func<int> ScrollAreaWidthCalculator;
+
+        private List<SeriesSizeItem> _allPositions = new List<SeriesSizeItem>();
 
         public ColumnSeriesSizes(Func<int> ScrollAreaWidthCalculator)
         {
@@ -74,7 +76,7 @@ namespace FastWpfGrid
         {
             get
             {
-                var ret = FirstVisibleScrollColumnDisplayIndex + VisibleScrollColumnCount;
+                var ret = FirstVisibleScrollColumnDisplayIndex + VisibleScrollColumnCount-1;
                 return ret;
             }
         }
@@ -82,7 +84,7 @@ namespace FastWpfGrid
         {
             get
             {
-                return _count - this.Columns.GetHiddenColumns().Count;
+                return _count - this.Columns.GetHiddenColumns().Count - this.Columns.GetFrozenColumns().Count;
             }
         }
 
@@ -96,7 +98,11 @@ namespace FastWpfGrid
 
         public int FrozenSize
         {
-            get { return _frozenItems.Sum(x => x.Size); }
+            get
+            {
+                var frozenColumns = this.Columns.GetFrozenColumns();
+                return frozenColumns.Sum(x => x.Width);
+            }
         }
 
         public int RealCount
@@ -118,7 +124,8 @@ namespace FastWpfGrid
             //_itemByIndex.Clear();
             _positions.Clear();
             _scrollIndexes.Clear();
-            _frozenItems.Clear();
+            
+            _allPositions.Clear();
         }
 
         public void InitColumns(FastGridColumnCollection columns)
@@ -147,15 +154,30 @@ namespace FastWpfGrid
 
         public void BuildIndex()
         {
+            _allPositions.Clear();
+            int lastEndPosition = 0;
+            foreach (var column in this.Columns.Where(x => x.IsHidden == false).OrderBy(x => x.DisplayIndex))
+            {
+                _allPositions.Add(new SeriesSizeItem
+                {
+                    DisplayIndex = column.DisplayIndex,
+                    ModelIndex = column.Index,
+                    Size = column.Width,
+                    Position = lastEndPosition,
+                });
+                lastEndPosition += column.Width;
+            }
+
+
+            
+
             _scrollItems.Clear();
             //_itemByIndex.Clear();
 
             _scrollIndexes = Columns.Select(x => x.DisplayIndex - FrozenCount).Where(x => x >= 0).ToList();
             _scrollIndexes.Sort();
 
-            int lastScrollIndex = -1;
-            int lastEndPosition = 0;
-
+            lastEndPosition = FrozenSize;
             foreach (int scrollIndex in _scrollIndexes)
             {
                 var displayIndex = FrozenCount + scrollIndex;
@@ -167,83 +189,52 @@ namespace FastWpfGrid
                     ScrollIndex = scrollIndex,
                     ModelIndex = column.Index,
                     Size = column.Width,
-                    Position = lastEndPosition + (scrollIndex - lastScrollIndex - 1) * DefaultSize,
+                    Position = lastEndPosition ,
                 };
                 _scrollItems.Add(item);
-                //_itemByIndex[index] = item;
-                lastScrollIndex = scrollIndex;
+             
                 lastEndPosition = item.EndPosition;
             }
 
             _positions = _scrollItems.Select(x => x.Position).ToList();
 
-
-            _frozenItems.Clear();
-            int lastpos = 0;
-
-            var frozenColumns = this.Columns.GetFrozenColumns();
-            for (int i = 0; i < frozenColumns.Count; i++)
-            {
-                var column = frozenColumns[i];
-
-                var item = new SeriesSizeItem
-                {
-                    DisplayIndex = column.DisplayIndex,
-                    FrozenIndex = i,
-                    ModelIndex = column.Index,
-                    Size = column.Width,
-                    Position = lastpos,
-                };
-                _frozenItems.Add(item);
-                lastpos += column.Width;
-            }
         }
 
         public int GetScrollIndexOnPosition(int position)
         {
-            int itemOrder = _positions.BinarySearch(position);
-            if (itemOrder >= 0) return itemOrder;
-            itemOrder = ~itemOrder; // bitwise complement - index is next larger index
-            if (itemOrder == 0) return position / DefaultSize;
-            if (position <= _scrollItems[itemOrder - 1].EndPosition) return _scrollItems[itemOrder - 1].ScrollIndex;
-            return (position - _scrollItems[itemOrder - 1].Position) / DefaultSize + _scrollItems[itemOrder - 1].ScrollIndex;
+            var displayIndex = GetDisplayIndexOnPosition(position);
+            return displayIndex - FrozenCount;
         }
 
         public int GetFrozenIndexOnPosition(int position)
         {
-            foreach (var item in _frozenItems)
+            foreach (var item in _allPositions)
             {
-                if (position >= item.Position && position <= item.EndPosition) return item.FrozenIndex;
+                if (position > item.EndPosition)
+                {
+                    return -1;
+                }
+                if (position >= item.Position && position <= item.EndPosition)
+                {
+                    return item.DisplayIndex;
+                }
             }
             return -1;
         }
 
-        public int GetSizeSum(int startScrollIndex, int endScrollIndex)
+        public int GetSizeSumBetweenScrollIndex(int startScrollIndex, int endScrollIndex,bool includedEndScrollIndex=false)
         {
-            int order1 = _scrollIndexes.BinarySearch(startScrollIndex);
-            int order2 = _scrollIndexes.BinarySearch(endScrollIndex);
-
-            int count = endScrollIndex - startScrollIndex;
-
-
-            if (order1 < 0) order1 = ~order1;
-            if (order2 < 0) order2 = ~order2;
-
             int result = 0;
 
-            for (int i = order1; i <= order2; i++)
+            var startDisplayIndex = FrozenCount + startScrollIndex;
+            var endDisplayIndex = FrozenCount + endScrollIndex;
+            endDisplayIndex = includedEndScrollIndex ? endDisplayIndex : endDisplayIndex - 1;
+            for (var i = startDisplayIndex; i <= endDisplayIndex; i++)
             {
-                if (i < 0) continue;
-                if (i >= _scrollItems.Count) continue;
-                var item = _scrollItems[i];
-                if (item.ScrollIndex < startScrollIndex) continue;
-                if (item.ScrollIndex >= endScrollIndex) continue;
-
+                var item = _allPositions[i];
                 result += item.Size;
-                count--;
             }
 
-            result += count * DefaultSize;
             return result;
         }
 
@@ -253,10 +244,10 @@ namespace FastWpfGrid
             return GetSizeByRealIndex(scrollIndex + FrozenCount);
         }
 
-        public int GetSizeByRealIndex(int realIndex)
+        public int GetSizeByRealIndex(int displayIndex)
         {
-            var column = this.Columns.FirstOrDefault(x => x.DisplayIndex == realIndex);
-            return column.Width;
+            var item = _allPositions[displayIndex];
+            return item.Size;
         }
 
 
@@ -272,23 +263,14 @@ namespace FastWpfGrid
             }
         }
 
-        public bool ModelIndexIsInScrollArea(int modelIndex)
-        {
-            var realIndex = ModelToReal(modelIndex);
-            return realIndex >= FrozenCount;
-        }
-
-        public int GetTotalScrollSizeSum()
-        {
-            //var scrollSizeOverrides = _sizeOverridesByModelIndex.Where(x => ModelIndexIsInScrollArea(x.Key)).ToList();
-            //return scrollSizeOverrides.Select(x => x.Value).Sum() + (Count - scrollSizeOverrides.Count) * DefaultSize;
-            return 0;
-        }
 
         public int GetPositionByRealIndex(int realIndex)
         {
             if (realIndex < 0) return 0;
-            if (realIndex < FrozenCount) return _frozenItems[realIndex].Position;
+            if (realIndex < FrozenCount)
+            {
+                return _allPositions[realIndex].Position;
+            }
             return GetPositionByScrollIndex(realIndex - FrozenCount);
         }
 
@@ -298,21 +280,28 @@ namespace FastWpfGrid
             if (order >= 0) return _scrollItems[order].Position;
             order = ~order;
             order--;
-            if (order < 0) return scrollIndex * DefaultSize;
-            return _scrollItems[order].EndPosition + (scrollIndex - _scrollItems[order].ScrollIndex - 1) * DefaultSize;
+            if (order < 0) return scrollIndex;
+            return _scrollItems[order].EndPosition + (scrollIndex - _scrollItems[order].ScrollIndex - 1);
         }
 
         public int GetVisibleScrollCount(int firstVisibleIndex, int viewportSize)
         {
-            int res = 0;
-            int index = firstVisibleIndex;
+            int displayIndex = FrozenCount+ firstVisibleIndex;
             int count = 0;
-            while (res < viewportSize && index <= Count)
+
+            foreach (var item in _allPositions)
             {
-                res += GetSizeByScrollIndex(index);
-                index++;
+                if (item.DisplayIndex < displayIndex)
+                {
+                    continue;
+                }
+                if (item.EndPosition >= viewportSize)
+                {
+                    break;
+                }
                 count++;
             }
+           
             return count;
         }
 
@@ -408,31 +397,26 @@ namespace FastWpfGrid
         public int RealToModel(int displayIndex)
         {
             var column = this.Columns.FirstOrDefault(x => x.DisplayIndex == displayIndex);
+            if (column == null)
+            {
+                return -1;
+            }
             return column.Index;
         }
 
-        public int ModelToReal(int modelIndex)
+        public int GetVisibleColumnLeftPosition(int visibleDisplayIndex)
         {
-            var column = this.Columns.FirstOrDefault(x => x.Index == modelIndex);
-            return column.DisplayIndex;
-        }
+            if (visibleDisplayIndex < FrozenCount)
+            {
+                return _allPositions[visibleDisplayIndex].Position;
+            }
+            if (visibleDisplayIndex < FirstVisibleScrollColumnDisplayIndex)
+            {
+                throw new ArgumentException("the column is invisible");
+            }
 
-        public int GetFrozenPosition(int frozenIndex)
-        {
-            return _frozenItems[frozenIndex].Position;
-        }
-
-        /// <summary>
-        /// Determines whether [has size override] [the specified model index].
-        /// </summary>
-        /// <param name="modelIndex">Index of the model.</param>
-        /// <returns>
-        ///   <c>true</c> if [has size override] [the specified model index]; otherwise, <c>false</c>.
-        /// </returns>
-        public bool HasSizeOverride(int modelIndex)
-        {
-            return false;
-            //return _sizeOverridesByModelIndex.ContainsKey(modelIndex);
+            return FrozenSize +
+                   GetSizeSumBetweenScrollIndex(FirstVisibleScrollColumnIndex, visibleDisplayIndex - FrozenCount);
         }
 
         public bool IsVisible(int testedRealIndex, int firstVisibleScrollIndex, int viewportSize)
@@ -444,22 +428,115 @@ namespace FastWpfGrid
             return onPageIndex >= 0 && onPageIndex < GetVisibleScrollCount(firstVisibleScrollIndex, viewportSize);
         }
 
-        public int? GetSeriesIndexOnPosition(double position, int headerSize, int firstVisible)
-        {
-            var series = this;
-            if (position <= headerSize) return null;
-            int frozenSize = series.FrozenSize;
-            if (position <= headerSize + frozenSize) return series.GetFrozenIndexOnPosition((int)Math.Round(position - headerSize));
-            return series.GetScrollIndexOnPosition(
-                       (int)Math.Round(position - headerSize - frozenSize) + series.GetPositionByScrollIndex(firstVisible)
-                   ) + series.FrozenCount;
-        }
+      
         /// <summary>
         /// 当前可见的列数量
         /// </summary>
         public int VisibleScrollColumnCount
         {
             get { return this.GetVisibleScrollCount(this.FirstVisibleScrollColumnIndex, this.ScrollAreaWidth); }
+        }
+
+        public int GetDisplayIndexOnPosition(int position)
+        {
+            if (position < 0)
+            {
+                return -1;
+            }
+            var frozenSize = this.FrozenSize;
+
+            var firstVisibileScrollColumnStartPosition =
+                _allPositions[this.FirstVisibleScrollColumnDisplayIndex].Position;
+
+            var isInFrozenRange = frozenSize > 0 && position <= frozenSize;
+
+            foreach (var item in _allPositions)
+            {
+                if (isInFrozenRange)
+                {
+                    if (item.EndPosition > frozenSize)
+                    {
+                        return -1;
+                    }
+
+                    var begin = item.Position;
+                    var end = item.EndPosition;
+                    if (position >= begin && position <= end)
+                    {
+                        return item.DisplayIndex;
+                    }
+                }
+                else
+                {
+                    if (item.EndPosition <= frozenSize)
+                    {
+                        continue;
+                    }
+
+                    var begin = (frozenSize + item.Position - firstVisibileScrollColumnStartPosition);
+                    var end = (frozenSize + item.EndPosition - firstVisibileScrollColumnStartPosition);
+                    if (position >= begin && position <= end)
+                    {
+                        return item.DisplayIndex;
+                    }
+                }
+            }
+            return -1;
+        }
+        public int GetResizingColumnDisplayIndexOnPosition(int position,int ColumnResizeTheresold)
+        {
+            if (position < 0)
+            {
+                return -1;
+            }
+            var frozenSize = this.FrozenSize;
+          
+            var firstVisibileScrollColumnStartPosition =
+                _allPositions[this.FirstVisibleScrollColumnDisplayIndex].Position;
+
+            var isInFrozenRange = frozenSize > 0 && position <= (frozenSize + ColumnResizeTheresold);
+
+            foreach (var item in _allPositions)
+            {
+                if (isInFrozenRange)
+                {
+                    if (item.EndPosition > frozenSize)
+                    {
+                        return -1;
+                    }
+
+                    var begin = item.Position;
+                    var end = item.EndPosition;
+                    if (position >= begin - ColumnResizeTheresold && position <= begin + ColumnResizeTheresold)
+                    {
+                        return item.DisplayIndex - 1;
+                    }
+
+                    if (position >= end - ColumnResizeTheresold && position <= end + ColumnResizeTheresold)
+                    {
+                        return item.DisplayIndex;
+                    }
+                }
+                else
+                {
+                    if (item.EndPosition <= frozenSize)
+                    {
+                        continue;
+                    }
+                    var begin = (frozenSize + item.Position - firstVisibileScrollColumnStartPosition);
+                    var end = (frozenSize + item.EndPosition - firstVisibileScrollColumnStartPosition);
+                    if (position >= begin - ColumnResizeTheresold && position <= begin + ColumnResizeTheresold)
+                    {
+                        return item.DisplayIndex - 1;
+                    }
+
+                    if (position >= end - ColumnResizeTheresold && position <= end + ColumnResizeTheresold)
+                    {
+                        return item.DisplayIndex;
+                    }
+                }
+            }
+            return -1;
         }
     }
 }

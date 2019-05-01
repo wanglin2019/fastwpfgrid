@@ -110,7 +110,7 @@ namespace FastWpfGrid
             int columnWidth = MinColumnWidthOverride ?? rowHeight*4;
 
             _rowSizes.DefaultSize = rowHeight;
-            _columnSizes.DefaultSize = columnWidth;
+            
 
             RecalculateHeaderSize();
 
@@ -697,11 +697,6 @@ namespace FastWpfGrid
             return res;
         }
 
-        public FastGridCellAddress CurrentModelCell
-        {
-            get { return RealToModel(CurrentCell); }
-            set { CurrentCell = ModelToReal(value); }
-        }
 
         public void ShowSelectionMenu(IEnumerable<string> commands)
         {

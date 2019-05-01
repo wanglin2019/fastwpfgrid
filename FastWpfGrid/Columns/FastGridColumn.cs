@@ -46,16 +46,30 @@ namespace FastWpfGrid
             set;
         }
 
+        private int width = 100;
         public int Width
         {
-            get;
-            set;
+            get
+            {
+                return this.width;
+            }
+            set
+            {
+                this.width = value;
+            }
         }
 
+        private int minWidth = 20;
         public int MinWidth
         {
-            get;
-            set;
+            get
+            {
+                return this.minWidth;
+            }
+            set
+            {
+                this.minWidth = value;
+            }
         }
 
         public int? MaxWidth
@@ -115,7 +129,10 @@ namespace FastWpfGrid
                 this._headerCell = value;
             }
         }
-
+        public IFastGridCell GetHeaderCell()
+        {
+            return HeaderCell;
+        }
         public IFastGridCell GenerateHeaderCell()
         {
             return HeaderCell;
